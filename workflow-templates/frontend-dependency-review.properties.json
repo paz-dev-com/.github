@@ -1,0 +1,16 @@
+{
+  "name": "Frontend Dependency Review",
+  "description": "Automated dependency review for pull requests in frontend projects (CleanFrontTemplate) to detect vulnerable or non-compliant dependencies",
+  "iconName": "javascript",
+  "categories": [
+    "javascript",
+    "typescript",
+    "frontend",
+    "security",
+    "dependencies"
+  ],
+  "filePatterns": [
+    "package.json$",
+    "package-lock.json$"
+  ]
+}

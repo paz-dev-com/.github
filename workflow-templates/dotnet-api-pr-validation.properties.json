@@ -1,0 +1,16 @@
+{
+  "name": ".NET API PR Validation",
+  "description": "Validates pull requests with automated tests, title checks, auto-labeling, and PR size analysis for .NET API projects (CleanApiTemplate)",
+  "iconName": "dotnet",
+  "categories": [
+    "dotnet",
+    "api",
+    "pr",
+    "validation",
+    "testing"
+  ],
+  "filePatterns": [
+    "*.sln$",
+    "*.csproj$"
+  ]
+}

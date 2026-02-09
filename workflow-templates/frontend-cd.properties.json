@@ -1,0 +1,17 @@
+{
+  "name": "Frontend CD",
+  "description": "Continuous Deployment pipeline for frontend projects (CleanFrontTemplate) with production build and deployment configuration",
+  "iconName": "javascript",
+  "categories": [
+    "javascript",
+    "typescript",
+    "frontend",
+    "cd",
+    "deployment"
+  ],
+  "filePatterns": [
+    "package.json$",
+    "angular.json$",
+    "tsconfig.json$"
+  ]
+}
