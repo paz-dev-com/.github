@@ -1,0 +1,17 @@
+{
+  "name": "Frontend CI",
+  "description": "Continuous Integration pipeline for frontend projects (CleanFrontTemplate) with build, lint, and test validation across multiple Node.js versions",
+  "iconName": "javascript",
+  "categories": [
+    "javascript",
+    "typescript",
+    "frontend",
+    "ci",
+    "testing"
+  ],
+  "filePatterns": [
+    "package.json$",
+    "angular.json$",
+    "tsconfig.json$"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "Frontend CodeQL Security Scan",
+  "description": "CodeQL security scanning for frontend projects (CleanFrontTemplate) with JavaScript and TypeScript analysis",
+  "iconName": "javascript",
+  "categories": [
+    "javascript",
+    "typescript",
+    "frontend",
+    "security",
+    "codeql"
+  ],
+  "filePatterns": [
+    "package.json$",
+    "angular.json$",
+    "tsconfig.json$"
+  ]
+}

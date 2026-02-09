@@ -1,0 +1,15 @@
+{
+  "name": "Frontend Stale Issue Management",
+  "description": "Automated stale issue and PR management for frontend projects (CleanFrontTemplate) to keep repositories clean and organized",
+  "iconName": "javascript",
+  "categories": [
+    "javascript",
+    "typescript",
+    "frontend",
+    "automation",
+    "maintenance"
+  ],
+  "filePatterns": [
+    "package.json$"
+  ]
+}
