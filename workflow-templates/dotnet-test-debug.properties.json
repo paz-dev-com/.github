@@ -1,0 +1,14 @@
+{
+  "name": ".NET Test Debugging",
+  "description": "Manual workflow for debugging .NET tests with configurable filters and verbosity levels",
+  "iconName": "dotnet",
+  "categories": [
+    "dotnet",
+    "testing",
+    "debugging"
+  ],
+  "filePatterns": [
+    "*.sln$",
+    "*.csproj$"
+  ]
+}

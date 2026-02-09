@@ -1,0 +1,98 @@
+name: Test Debugging
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: 'Test filter (e.g., FullyQualifiedName~UserServiceTests)'
+        required: false
+        default: ''
+      verbosity:
+        description: 'Test verbosity level'
+        required: false
+        default: 'detailed'
+        type: choice
+        options:
+          - quiet
+          - minimal
+          - normal
+          - detailed
+          - diagnostic
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  SOLUTION_PATH: 'YourSolution.sln'
+  TEST_PROJECT: 'YourProject.Test/YourProject.Test.csproj'
+
+jobs:
+  debug-tests:
+    name: Debug Tests
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+    - name: Build
+      run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Debug --no-restore
+
+    - name: Run Tests (Filtered)
+      if: ${{ github.event.inputs.test_filter != '' }}
+      run: |
+        echo "Running filtered tests: ${{ github.event.inputs.test_filter }}"
+        dotnet test ${{ env.TEST_PROJECT }} `
+          --configuration Debug `
+          --no-build `
+          --filter "${{ github.event.inputs.test_filter }}" `
+          --logger "console;verbosity=${{ github.event.inputs.verbosity }}" `
+          --logger "trx;LogFileName=test-results.trx" `
+          --collect:"XPlat Code Coverage"
+
+    - name: Run All Tests
+      if: ${{ github.event.inputs.test_filter == '' }}
+      run: |
+        echo "Running all tests"
+        dotnet test ${{ env.TEST_PROJECT }} `
+          --configuration Debug `
+          --no-build `
+          --logger "console;verbosity=${{ github.event.inputs.verbosity }}" `
+          --logger "trx;LogFileName=test-results.trx" `
+          --collect:"XPlat Code Coverage"
+
+    - name: Publish Test Results
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Test Results (Debug)
+        path: '**/test-results.trx'
+        reporter: dotnet-trx
+        fail-on-error: false
+
+    - name: Upload Coverage
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: '**/coverage.cobertura.xml'
+        retention-days: 7
+
+    - name: Test Summary
+      if: always()
+      run: |
+        echo "### 🐛 Test Debugging Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Configuration:** Debug" >> $GITHUB_STEP_SUMMARY
+        echo "**Verbosity:** ${{ github.event.inputs.verbosity }}" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ github.event.inputs.test_filter }}" != "" ]; then
+          echo "**Filter:** ${{ github.event.inputs.test_filter }}" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "**Filter:** None (all tests)" >> $GITHUB_STEP_SUMMARY
+        fi

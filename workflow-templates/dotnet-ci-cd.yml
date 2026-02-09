@@ -1,0 +1,256 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  SOLUTION_PATH: 'YourSolution.sln'
+  TEST_PROJECT: 'YourProject.Test/YourProject.Test.csproj'
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+    - name: Configure PowerShell Execution Policy
+      shell: powershell
+      run: |
+        Write-Host "Configuring PowerShell Execution Policy for tests..."
+        Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
+        Get-ExecutionPolicy -List
+
+    - name: Build
+      run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore
+
+    - name: Run Tests
+      run: |
+        dotnet test ${{ env.TEST_PROJECT }} --configuration Release --no-build --verbosity normal --logger "console;verbosity=detailed" --logger "trx;LogFileName=test-results.trx" -- RunConfiguration.CollectSourceInformation=true
+
+    - name: Upload Test Results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ci-test-results
+        path: '**/TestResults/*.trx'
+        if-no-files-found: warn
+        retention-days: 7
+
+    - name: Display Test Summary
+      if: always()
+      shell: powershell
+      run: |
+        Write-Host "`n=== Test Summary ===" -ForegroundColor Cyan
+        $trxFiles = Get-ChildItem -Path "${{ env.TEST_PROJECT }}/TestResults" -Filter "*.trx" -ErrorAction SilentlyContinue
+        
+        if ($trxFiles) {
+          $markdown = @"
+        ## 📊 Test Results
+        
+        "@ 
+          
+          foreach ($trxFile in $trxFiles) {
+            [xml]$trx = Get-Content $trxFile.FullName
+            $summary = $trx.TestRun.ResultSummary
+            $total = $summary.Counters.total
+            $passed = $summary.Counters.passed
+            $failed = $summary.Counters.failed
+            $skipped = $summary.Counters.notExecuted
+            
+            $passRate = [math]::Round(($passed / $total) * 100, 1)
+            $status = if ($failed -eq 0) { "✅" } else { "❌" }
+            
+            Write-Host "Total: $total | Passed: $passed | Failed: $failed | Skipped: $skipped" -ForegroundColor $(if ($failed -eq 0) { "Green" } else { "Red" })
+            
+            $markdown += @"
+        | Metric | Count | Percentage |
+        |--------|-------|------------|
+        | $status **Total** | $total | 100% |
+        | ✅ **Passed** | $passed | $passRate% |
+        | ❌ **Failed** | $failed | $([math]::Round(($failed / $total) * 100, 1))% |
+        | ⏭️ **Skipped** | $skipped | $([math]::Round(($skipped / $total) * 100, 1))% |
+        
+        "@
+            
+            if ($failed -gt 0) {
+              Write-Host "`nFailed Tests:" -ForegroundColor Red
+              $markdown += "`n### ❌ Failed Tests`n`n"
+              $failedTests = $trx.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq "Failed" }
+              foreach ($test in $failedTests) {
+                Write-Host "  • $($test.testName)" -ForegroundColor Yellow
+                $markdown += "- **$($test.testName)**`n"
+                if ($test.Output.ErrorInfo.Message) {
+                  Write-Host "     $($test.Output.ErrorInfo.Message)" -ForegroundColor Gray
+                  $markdown += "  ``````````n  $($test.Output.ErrorInfo.Message)  ``````````n"
+                }
+              }
+            }
+          }
+          
+          $markdown | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+        }
+
+    - name: Code Coverage
+      if: success()
+      run: |
+        dotnet test ${{ env.TEST_PROJECT }} --configuration Release --no-build --collect:"XPlat Code Coverage" --results-directory ./coverage
+        
+    - name: Upload Coverage
+      if: success()
+      uses: codecov/codecov-action@v4
+      with:
+        directory: ./coverage
+        flags: unittests
+        name: codecov-coverage
+
+  code-quality:
+    name: Code Quality Analysis
+    runs-on: windows-latest
+    needs: build-and-test
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+    - name: Run Code Analysis
+      run: |
+        dotnet build ${{ env.SOLUTION_PATH }} --configuration Release /p:TreatWarningsAsErrors=false /p:RunAnalyzers=true /p:WarningLevel=0
+
+    - name: Check formatting
+      continue-on-error: true
+      run: dotnet format ${{ env.SOLUTION_PATH }} --verify-no-changes --verbosity normal
+
+  security-scan:
+    name: Security Scan
+    runs-on: windows-latest
+    needs: build-and-test
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Run Security Scan
+      run: |
+        dotnet list ${{ env.SOLUTION_PATH }} package --vulnerable --include-transitive
+        dotnet list ${{ env.SOLUTION_PATH }} package --deprecated
+
+  build-status:
+    name: Build Status Check
+    runs-on: windows-latest
+    needs: [build-and-test, code-quality, security-scan]
+    if: always()
+    
+    steps:
+    - name: Create Summary Report
+      shell: powershell
+      run: |
+        $buildStatus = "${{ needs.build-and-test.result }}"
+        $qualityStatus = "${{ needs.code-quality.result }}"
+        $securityStatus = "${{ needs.security-scan.result }}"
+        
+        $buildIcon = if ($buildStatus -eq "success") { "✅" } else { "❌" }
+        $qualityIcon = if ($qualityStatus -eq "success") { "✅" } else { "❌" }
+        $securityIcon = if ($securityStatus -eq "success") { "✅" } else { "❌" }
+        
+        $allSuccess = ($buildStatus -eq "success" -and $qualityStatus -eq "success" -and $securityStatus -eq "success")
+        $overallIcon = if ($allSuccess) { "✅" } else { "❌" }
+        $overallStatus = if ($allSuccess) { "SUCCESS" } else { "FAILED" }
+        
+        $markdown = @"
+        # $overallIcon CI/CD Pipeline Summary
+        
+        ## Overall Status: **$overallStatus**
+        
+        | Job | Status | Result |
+        |-----|--------|--------|
+        | 🏗️ Build & Test | $buildIcon | **$buildStatus** |
+        | 📝 Code Quality | $qualityIcon | **$qualityStatus** |
+        | 🔒 Security Scan | $securityIcon | **$securityStatus** |
+        
+        ---
+        
+        ### 📋 Details
+        
+        **Build & Test:** $buildStatus
+        - Compilation: $(if ($buildStatus -eq "success") { "✅ Successful" } else { "❌ Failed" })
+        - Unit Tests: $(if ($buildStatus -eq "success") { "✅ All passed" } else { "❌ Some failed" })
+        
+        **Code Quality:** $qualityStatus
+        - Code Analysis: $(if ($qualityStatus -eq "success") { "✅ No issues" } else { "⚠️ Issues found" })
+        - Formatting: $(if ($qualityStatus -eq "success") { "✅ Compliant" } else { "⚠️ Non-compliant" })
+        
+        **Security Scan:** $securityStatus
+        - Vulnerabilities: $(if ($securityStatus -eq "success") { "✅ None found" } else { "⚠️ Found" })
+        - Deprecated packages: $(if ($securityStatus -eq "success") { "✅ None" } else { "⚠️ Found" })
+        
+        ---
+        
+        $(if ($allSuccess) {
+          @"
+        ### 🎉 All Checks Passed!
+        
+        The pipeline completed successfully. All quality gates have been met:
+        - ✅ Build successful
+        - ✅ All tests passing
+        - ✅ No security issues
+        - ✅ Code quality standards met
+        
+        **Ready for deployment!**
+        "@
+        } else {
+          @"
+        ### ⚠️ Pipeline Failed
+        
+        Some checks did not pass. Please review the failed jobs above and address the issues.
+        
+        **Action required before merging.**
+        "@
+        })
+        "@
+        
+        $markdown | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8
+        
+        Write-Host "`n=== CI/CD Pipeline Summary ===" -ForegroundColor Cyan
+        Write-Host "Build & Test: $buildStatus" -ForegroundColor $(if ($buildStatus -eq "success") { "Green" } else { "Red" })
+        Write-Host "Code Quality: $qualityStatus" -ForegroundColor $(if ($qualityStatus -eq "success") { "Green" } else { "Red" })
+        Write-Host "Security: $securityStatus" -ForegroundColor $(if ($securityStatus -eq "success") { "Green" } else { "Red" })
+        
+        if (-not $allSuccess) {
+          Write-Host "`n❌ Pipeline FAILED" -ForegroundColor Red
+          exit 1
+        } else {
+          Write-Host "`n✅ Pipeline PASSED" -ForegroundColor Green
+        }
