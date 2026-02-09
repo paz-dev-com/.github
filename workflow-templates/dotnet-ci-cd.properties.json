@@ -1,0 +1,15 @@
+{
+  "name": ".NET CI/CD Pipeline",
+  "description": "Comprehensive CI/CD pipeline for .NET projects with build, test, code quality analysis, and security scanning",
+  "iconName": "dotnet",
+  "categories": [
+    "dotnet",
+    "ci",
+    "cd",
+    "testing"
+  ],
+  "filePatterns": [
+    "*.sln$",
+    "*.csproj$"
+  ]
+}

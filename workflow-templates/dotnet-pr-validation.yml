@@ -1,0 +1,205 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    types: [opened, synchronize, reopened]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  SOLUTION_PATH: 'YourSolution.sln'
+  TEST_PROJECT: 'YourProject.Test/YourProject.Test.csproj'
+
+jobs:
+  validate-pr:
+    name: Validate Pull Request
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+    - name: Configure PowerShell Execution Policy
+      shell: powershell
+      run: |
+        Write-Host "Configuring PowerShell Execution Policy for tests..."
+        Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
+        Get-ExecutionPolicy -List
+
+    - name: Build
+      run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore
+
+    - name: Run Tests
+      id: tests
+      run: |
+        dotnet test ${{ env.TEST_PROJECT }} --configuration Release --no-build --verbosity normal --logger "console;verbosity=detailed" --logger "trx;LogFileName=test-results.trx" -- RunConfiguration.CollectSourceInformation=true
+      continue-on-error: false
+
+    - name: Upload Test Results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: '**/TestResults/*.trx'
+        if-no-files-found: warn
+        retention-days: 7
+
+    - name: Display Test Summary
+      if: always()
+      shell: powershell
+      run: |
+        Write-Host "`n=== Test Summary ===" -ForegroundColor Cyan
+        $trxFiles = Get-ChildItem -Path "${{ env.TEST_PROJECT }}/TestResults" -Filter "*.trx" -ErrorAction SilentlyContinue
+        
+        if ($trxFiles) {
+          $markdown = @"
+        ## 📊 PR Test Results
+        
+        "@ 
+          
+          foreach ($trxFile in $trxFiles) {
+            [xml]$trx = Get-Content $trxFile.FullName
+            $summary = $trx.TestRun.ResultSummary
+            $total = $summary.Counters.total
+            $passed = $summary.Counters.passed
+            $failed = $summary.Counters.failed
+            $skipped = $summary.Counters.notExecuted
+            
+            $passRate = [math]::Round(($passed / $total) * 100, 1)
+            $status = if ($failed -eq 0) { "✅" } else { "❌" }
+            
+            Write-Host "Total: $total | Passed: $passed | Failed: $failed | Skipped: $skipped" -ForegroundColor $(if ($failed -eq 0) { "Green" } else { "Red" })
+            
+            $markdown += @"
+        | Metric | Count | Percentage |
+        |--------|-------|------------|
+        | $status **Total** | $total | 100% |
+        | ✅ **Passed** | $passed | $passRate% |
+        | ❌ **Failed** | $failed | $([math]::Round(($failed / $total) * 100, 1))% |
+        | ⏭️ **Skipped** | $skipped | $([math]::Round(($skipped / $total) * 100, 1))% |
+        
+        "@
+            
+            if ($failed -gt 0) {
+              Write-Host "`nFailed Tests:" -ForegroundColor Red
+              $markdown += "`n### ❌ Failed Tests`n`n"
+              $failedTests = $trx.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq "Failed" }
+              foreach ($test in $failedTests) {
+                Write-Host "  • $($test.testName)" -ForegroundColor Yellow
+                $markdown += "- **$($test.testName)**`n"
+                if ($test.Output.ErrorInfo.Message) {
+                  Write-Host "     $($test.Output.ErrorInfo.Message)" -ForegroundColor Gray
+                  $markdown += "  ```````n  $($test.Output.ErrorInfo.Message)`n  ```````n"
+                }
+              }
+              $markdown += "`n---`n`n⚠️ **Please fix the failing tests before merging.**"
+            } else {
+              $markdown += "`n---`n`n✅ **All tests passed! PR is ready for review.**"
+            }
+          }
+          
+          $markdown | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+        } else {
+          Write-Host "No test results found" -ForegroundColor Yellow
+        }
+
+
+    - name: PR Check Passed
+      if: success()
+      run: |
+        echo "✅ Pull Request validation passed!"
+        echo "All tests passed successfully."
+
+    - name: PR Check Failed
+      if: failure()
+      run: |
+        echo "❌ Pull Request validation failed!"
+        echo "Please fix the issues before merging."
+        exit 1
+
+  pr-title-check:
+    name: Check PR Title
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Validate PR Title
+      uses: amannn/action-semantic-pull-request@v5
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        types: |
+          feat
+          fix
+          docs
+          style
+          refactor
+          perf
+          test
+          build
+          ci
+          chore
+          revert
+        requireScope: false
+        subjectPattern: ^[A-Z].+$
+        subjectPatternError: |
+          The title must start with an uppercase letter.
+          Example: "feat: Add user management"
+
+  pr-labels:
+    name: Auto Label PR
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Auto Label
+      uses: actions/labeler@v5
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        configuration-path: .github/labeler.yml
+
+  pr-size:
+    name: Check PR Size
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check PR Size
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const pr = context.payload.pull_request;
+          const additions = pr.additions;
+          const deletions = pr.deletions;
+          const total = additions + deletions;
+          
+          let label = '';
+          if (total < 100) label = 'size/XS';
+          else if (total < 300) label = 'size/S';
+          else if (total < 600) label = 'size/M';
+          else if (total < 1000) label = 'size/L';
+          else label = 'size/XL';
+          
+          await github.rest.issues.addLabels({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: pr.number,
+            labels: [label]
+          });
+          
+          if (total > 1000) {
+            core.warning(`This PR is very large (${total} lines). Consider splitting it into smaller PRs.`);
+          }

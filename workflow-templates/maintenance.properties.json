@@ -1,0 +1,10 @@
+{
+  "name": "Repository Maintenance",
+  "description": "Scheduled maintenance tasks including dependency checks, cache cleanup, and stale issue management",
+  "iconName": "tools",
+  "categories": [
+    "automation",
+    "maintenance",
+    "cleanup"
+  ]
+}

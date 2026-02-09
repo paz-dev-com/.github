@@ -1,0 +1,14 @@
+{
+  "name": ".NET Release",
+  "description": "Automated release workflow for .NET projects with build, test, publish, and GitHub release creation",
+  "iconName": "dotnet",
+  "categories": [
+    "dotnet",
+    "release",
+    "deployment"
+  ],
+  "filePatterns": [
+    "*.sln$",
+    "*.csproj$"
+  ]
+}
