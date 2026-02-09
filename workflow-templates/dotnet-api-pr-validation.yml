@@ -5,6 +5,10 @@ on:
     branches: [ main, develop ]
     types: [opened, synchronize, reopened]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 env:
   DOTNET_VERSION: '8.0.x'
   SOLUTION_PATH: 'YourSolution.sln'
@@ -14,6 +18,7 @@ jobs:
   validate-pr:
     name: Validate Pull Request
     runs-on: windows-latest
+    timeout-minutes: 30
     
     steps:
     - name: Checkout
@@ -25,6 +30,14 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/packages.lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
 
     - name: Restore dependencies
       run: dotnet restore ${{ env.SOLUTION_PATH }}
@@ -130,6 +143,7 @@ jobs:
   pr-title-check:
     name: Check PR Title
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     
     steps:
     - name: Validate PR Title
@@ -158,6 +172,7 @@ jobs:
   pr-labels:
     name: Auto Label PR
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       pull-requests: write
       contents: read
@@ -175,6 +190,7 @@ jobs:
   pr-size:
     name: Check PR Size
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     
     steps:
     - name: Check PR Size

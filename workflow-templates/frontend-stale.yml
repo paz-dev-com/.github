@@ -4,9 +4,14 @@ on:
   schedule:
     - cron: '0 0 * * *' # Daily at midnight
 
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
 jobs:
   stale:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       issues: write
       pull-requests: write
