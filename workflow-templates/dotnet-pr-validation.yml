@@ -99,7 +99,7 @@ jobs:
                 $markdown += "- **$($test.testName)**`n"
                 if ($test.Output.ErrorInfo.Message) {
                   Write-Host "     $($test.Output.ErrorInfo.Message)" -ForegroundColor Gray
-                  $markdown += "  ``````````n  $($test.Output.ErrorInfo.Message)  ``````````n"
+                  $markdown += "  ```````n  $($test.Output.ErrorInfo.Message)`n  ```````n"
                 }
               }
               $markdown += "`n---`n`n⚠️ **Please fix the failing tests before merging.**"

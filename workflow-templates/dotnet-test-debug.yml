@@ -86,13 +86,14 @@ jobs:
 
     - name: Test Summary
       if: always()
+      shell: powershell
       run: |
-        echo "### 🐛 Test Debugging Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Configuration:** Debug" >> $GITHUB_STEP_SUMMARY
-        echo "**Verbosity:** ${{ github.event.inputs.verbosity }}" >> $GITHUB_STEP_SUMMARY
-        if [ "${{ github.event.inputs.test_filter }}" != "" ]; then
-          echo "**Filter:** ${{ github.event.inputs.test_filter }}" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "**Filter:** None (all tests)" >> $GITHUB_STEP_SUMMARY
-        fi
+        "### 🐛 Test Debugging Summary" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+        "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+        "**Configuration:** Debug" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+        "**Verbosity:** ${{ github.event.inputs.verbosity }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+        if ("${{ github.event.inputs.test_filter }}" -ne "") {
+          "**Filter:** ${{ github.event.inputs.test_filter }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+        } else {
+          "**Filter:** None (all tests)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+        }
