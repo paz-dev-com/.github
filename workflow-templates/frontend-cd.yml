@@ -52,7 +52,7 @@ jobs:
           path: |
             dist
             .angular/cache
-          key: ${{ runner.os }}-build-${{ github.sha }}
+          key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json', 'angular.json', 'tsconfig.json') }}
           restore-keys: |
             ${{ runner.os }}-build-
 

@@ -82,15 +82,20 @@ The deployment workflow caches build outputs to speed up consecutive deployments
     path: |
       dist
       .angular/cache
-    key: ${{ runner.os }}-build-${{ github.sha }}
+    key: ${{ runner.os }}-build-${{ hashFiles('**/package-lock.json', 'angular.json', 'tsconfig.json') }}
     restore-keys: |
       ${{ runner.os }}-build-
 ```
 
 **Benefits:**
-- Faster rebuilds for incremental changes
+- Faster rebuilds when configuration and dependencies haven't changed
 - Improved Angular build cache utilization
-- Reduced deployment time
+- Reduced deployment time for unchanged code
+
+**Cache Strategy:**
+- Cache key is based on dependency and configuration files
+- Allows cache reuse when build inputs haven't changed
+- Invalidates cache when dependencies or build config changes
 
 ### 4. Concurrency Controls
 
@@ -221,13 +226,17 @@ jobs:
 1. **Use specific hash files for cache keys:**
    - For NuGet: `**/*.csproj` and `**/packages.lock.json`
    - For npm: `**/package-lock.json`
-   - For builds: `${{ github.sha }}`
+   - For builds: Hash of configuration files (e.g., `angular.json`, `tsconfig.json`) and dependencies
 
-2. **Use restore-keys for fallback:**
+2. **Avoid using commit SHA or run ID in cache keys:**
+   - These create unique keys for every run, preventing cache reuse
+   - Instead, use hashes of files that affect the cached output
+
+3. **Use restore-keys for fallback:**
    - Allows using slightly outdated cache when exact match not found
    - Improves cache hit rate
 
-3. **Include OS in cache key:**
+4. **Include OS in cache key:**
    - Prevents cache conflicts between different runners
    - Format: `${{ runner.os }}-cache-name-...`
 

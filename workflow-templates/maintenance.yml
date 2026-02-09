@@ -28,7 +28,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-maintenance-${{ github.run_id }}
+        key: ${{ runner.os }}-nuget-maintenance-${{ hashFiles('**/*.csproj', '**/packages.lock.json') }}
         restore-keys: |
           ${{ runner.os }}-nuget-maintenance-
           ${{ runner.os }}-nuget-
